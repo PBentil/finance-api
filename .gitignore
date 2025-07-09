@@ -1,0 +1,21 @@
+# Ignore environment variables
+.env
+
+# Node.js
+node_modules/
+dist/
+build/
+
+# Expo / React Native
+.expo/
+.expo-shared/
+web-build/
+expo-env.d.ts
+
+# Debug files
+npm-debug.*
+yarn-debug.*
+*.log
+
+# macOS system files
+.DS_Store
