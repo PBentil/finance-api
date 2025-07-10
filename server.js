@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import {rateLimit} from "express-rate-limit";
 import transactionsRoute from "./routes/transactionsRoute.js";
-import {initDB} from "./config/db.js";
+import sequelize from "./config/db.js";
 import authRoute from "./routes/authRoute.js";
 
 dotenv.config();
@@ -19,7 +19,8 @@ const limiter = rateLimit({
   standardHeaders:true,
   legacyHeaders:false,
 });
-app.use(limiter);
+
+app.use( limiter );
 app.use(express.json());
 
 
@@ -33,8 +34,18 @@ app.get('/', (req, res) => {
 app.use("/api/transactions", transactionsRoute);
 app.use("/api/auth", authRoute);
 
-initDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-  });
-});
+sequelize.authenticate()
+    .then(() => {
+      console.log('Database connected...');
+
+      return sequelize.sync();
+    })
+    .then(() => {
+      console.log('Models synchronized');
+      app.listen(PORT, () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+      });
+    })
+    .catch((err) => {
+      console.error('Unable to connect to the database:', err);
+    });

@@ -1,5 +1,6 @@
-// Create a transaction
-import {query} from "../config/db.js";
+import db from '../models/index.js';
+const { transactions } = db;
+
 export async function Transaction(req, res) {
     try {
         const { user_id, title, amount, category, type } = req.body;
@@ -14,16 +15,18 @@ export async function Transaction(req, res) {
 
         const positiveAmount = Math.abs(amount);
 
-        const result = await query(
-            `INSERT INTO transactions (user_id, title, amount, category, type)
-             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [user_id, title, positiveAmount, category, type]
-        );
+        const newTransaction = await transactions.create({
+            user_id,
+            title,
+            amount: positiveAmount,
+            category,
+            type,
+        });
 
         res.status(201).json({
             success: true,
             message: "Transaction added successfully",
-            data: result.rows[0],
+            data: newTransaction,
         });
     } catch (error) {
         console.error("Error creating transaction:", error);
@@ -31,21 +34,20 @@ export async function Transaction(req, res) {
     }
 }
 
-// Get all transactions by user_id (use authenticated user id)
 export async function getTransactions(req, res) {
     try {
         const userId = req.params.id;
 
-        const result = await query(
-            `SELECT * FROM transactions WHERE user_id = $1 ORDER BY created_at DESC`,
-            [userId]
-        );
+        const allTransactions = await transactions.findAll({
+            where: { user_id: userId },
+            order: [['createdAt', 'DESC']],
+        });
 
-        if (result.rows.length === 0) {
+        if (!allTransactions.length) {
             return res.status(404).json({ message: "No transactions found for this user" });
         }
 
-        res.status(200).json(result.rows);
+        res.status(200).json(allTransactions);
     } catch (error) {
         console.error("Error getting transactions:", error);
         res.status(500).json({ message: "Internal server error" });
@@ -57,14 +59,15 @@ export async function deleteTransactions(req, res) {
         const userId = req.user.id;
         const { id } = req.params;
 
-        const result = await query(
-            `DELETE FROM transactions WHERE id = $1 AND user_id = $2 RETURNING *`,
-            [id, userId]
-        );
+        const transaction = await transactions.findOne({
+            where: { id, user_id: userId },
+        });
 
-        if (result.rows.length === 0) {
+        if (!transaction) {
             return res.status(404).json({ message: "Transaction not found or not authorized" });
         }
+
+        await transaction.destroy();
 
         res.status(200).json({ message: "Transaction deleted successfully" });
     } catch (error) {
@@ -73,35 +76,28 @@ export async function deleteTransactions(req, res) {
     }
 }
 
-
 export async function transactionSummary(req, res) {
     try {
         const userId = req.params.id;
 
-        const balanceResult = await query(
-            `SELECT
-                 COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END), 0) AS balance
-             FROM transactions WHERE user_id = $1`,
-            [userId]
-        );
+        const income = await transactions.sum('amount', {
+            where: { user_id: userId, type: 'income' }
+        });
 
-        const incomeResult = await query(
-            `SELECT COALESCE(SUM(amount), 0) AS income FROM transactions WHERE user_id = $1 AND type = 'income'`,
-            [userId]
-        );
+        const expense = await transactions.sum('amount', {
+            where: { user_id: userId, type: 'expense' }
+        });
 
-        const expenseResult = await query(
-            `SELECT COALESCE(SUM(amount), 0) AS expenses FROM transactions WHERE user_id = $1 AND type = 'expense'`,
-            [userId]
-        );
+        const balance = (income || 0) - (expense || 0);
 
         res.status(200).json({
-            balance: balanceResult.rows[0].balance,
-            income: incomeResult.rows[0].income,
-            expenses: expenseResult.rows[0].expenses,
+            balance,
+            income: income || 0,
+            expenses: expense || 0,
         });
+
     } catch (error) {
-        console.error("Error getting summary:", error);
+        console.error("Error getting transaction summary:", error);
         res.status(500).json({ message: "Internal server error" });
     }
 }
