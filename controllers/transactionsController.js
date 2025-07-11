@@ -43,9 +43,6 @@ export async function getTransactions(req, res) {
             order: [['createdAt', 'DESC']],
         });
 
-        if (!allTransactions.length) {
-            return res.status(404).json({ message: "No transactions found for this user" });
-        }
 
         res.status(200).json(allTransactions);
     } catch (error) {
@@ -63,9 +60,7 @@ export async function deleteTransactions(req, res) {
             where: { id, user_id: userId },
         });
 
-        if (!transaction) {
-            return res.status(404).json({ message: "Transaction not found or not authorized" });
-        }
+
 
         await transaction.destroy();
 
